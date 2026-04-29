@@ -501,22 +501,60 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
   const STORAGE_KEYS = { stock: 'loja_stock_v1', sales: 'loja_sales_v1' };
   const CREDENTIALS = { user: 'zavvo', pass: '1234@' };
 
-  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
-  function loadData(key){ const raw = localStorage.getItem(key); try{ return raw ? JSON.parse(raw) : []; }catch(e){ console.warn('parse error', key); return []; } }
-  function saveData(key, data){ localStorage.setItem(key, JSON.stringify(data)); }
-  function saveGastos(gastos){ localStorage.setItem('loja_gastos_v1', JSON.stringify(gastos)); }
-  function saveCustosVendidos(v){ localStorage.setItem('loja_custos_vendidos_v1', String(v)); }
-  function moneyFmt(n){ return Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-  function moneyLabel(n){ return 'R$ ' + moneyFmt(n||0); }
+  const API = 'http://localhost:3001/api';
 
-  let stock = loadData(STORAGE_KEYS.stock);
-  let sales = loadData(STORAGE_KEYS.sales);
-  let gastos = JSON.parse(localStorage.getItem('loja_gastos_v1') || '[]');
-  let custosProdutosVendidos = Number(localStorage.getItem('loja_custos_vendidos_v1') || 0);
-  let clientes = JSON.parse(localStorage.getItem('loja_clientes_v1') || '[]');
-function saveClientes(data){ localStorage.setItem('loja_clientes_v1', JSON.stringify(data)); }
-  let currentUser = null;
-  let grafPizza = null;
+// Carregar dados do banco
+async function initDB() {
+  stock   = await fetch(`${API}/stock`).then(r => r.json());
+  sales   = await fetch(`${API}/sales`).then(r => r.json());
+  gastos  = await fetch(`${API}/gastos`).then(r => r.json());
+  clientes = await fetch(`${API}/clientes`).then(r => r.json());
+  // recalcula custos vendidos a partir das sales
+  custosProdutosVendidos = sales
+    .filter(s => !s.estornado)
+    .reduce((a, b) => a + Number(b.custoTotal), 0);
+}
+
+// Salvar no banco
+async function saveStock(item) {
+  await fetch(`${API}/stock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item)
+  });
+}
+
+async function deletarStock(id) {
+  await fetch(`${API}/stock/${id}`, { method: 'DELETE' });
+}
+
+async function saveSale(sale) {
+  await fetch(`${API}/sales`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sale)
+  });
+}
+
+async function saveGasto(gasto) {
+  await fetch(`${API}/gastos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(gasto)
+  });
+}
+
+async function deletarGasto(id) {
+  await fetch(`${API}/gastos/${id}`, { method: 'DELETE' });
+}
+
+async function saveCliente(cliente) {
+  await fetch(`${API}/clientes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cliente)
+  });
+}
 
   // DOM refs
   const loginPage = document.getElementById('login-page');
@@ -618,13 +656,14 @@ function saveClientes(data){ localStorage.setItem('loja_clientes_v1', JSON.strin
   Chart.register(centerTextPlugin);
 
   // AUTH
-  function showApp(user){
-    currentUser = user;
-    currentUserEl.textContent = user;
-    loginPage.style.display = 'none';
-    appRoot.style.display = 'grid';
-    renderAll();
-  }
+  async function showApp(user) {
+  currentUser = user;
+  currentUserEl.textContent = user;
+  loginPage.style.display = 'none';
+  appRoot.style.display = 'grid';
+  await initDB();  // carrega do banco antes de renderizar
+  renderAll();
+}
 
   loginBtn.addEventListener('click', ()=>{
     const u = loginUser.value.trim();
