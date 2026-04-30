@@ -141,7 +141,7 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
 
       <div style="margin-top:auto;padding-top:20px;border-top:1px solid var(--glass-border)">
         <div class="small muted" style="margin-bottom:12px">Exportar Dados</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;flex-direction:column;align-items:center;margin-top:8px;gap:10px">
           <button id="exportStockBtnSide" class="btn ghost">📤 Exportar Estoque</button>
           <button id="exportSalesBtnSide" class="btn ghost">📤 Exportar Vendas</button>
           <button id="clearBtnSide" class="btn ghost">🔄 Resetar vendas/gastos</button>
@@ -215,7 +215,7 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
                 <label class="small muted" style="margin-top:8px">CLIENTE</label>
 <input id="quickCliente" list="clientesList" placeholder="Digite o nome do cliente..." autocomplete="off" />
 <datalist id="clientesList"></datalist>
-                <div style="display:flex;gap:12px">
+                <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:100%">
   <div style="flex:1">
     <label class="small muted">QUANTIDADE</label>
     <input id="quickQtd" type="number" min="1" value="1" style="width:100%;margin-top:6px" />
@@ -1987,5 +1987,143 @@ window.addEventListener('beforeunload', ()=>{
 });
 
   </script>
+  <!-- ARQUIVO COMPLETO ATUALIZADO (RESUMIDO PARA COLAR DIRETO NO FINAL DO SEU JS) -->
+
+<script>
+// ================= USUÁRIOS =================
+let usuarios = JSON.parse(localStorage.getItem('usuarios')) || [
+  {
+    id: '1',
+    nome: 'Administrador',
+    email: 'admin@zavvo.com',
+    usuario: 'zavvo',
+    senha: '1234@',
+    tipo: 'admin'
+  }
+];
+
+let usuarioLogado = null;
+
+function salvarUsuarios(){
+  localStorage.setItem('usuarios', JSON.stringify(usuarios));
+}
+
+// ================= LOGIN =================
+loginBtn.addEventListener('click', () => {
+  const usuario = loginUser.value.trim();
+  const senha = loginPass.value;
+
+  const user = usuarios.find(
+    u => u.usuario === usuario && u.senha === senha
+  );
+
+  if (!user) {
+    return alert('Usuário ou senha incorretos');
+  }
+
+  usuarioLogado = user;
+  showApp(user.nome);
+  aplicarPermissoes();
+});
+
+// ================= CADASTRO =================
+function cadastrarUsuario(nome, email, usuario, senha, tipo='comum'){
+  const existe = usuarios.find(
+    u => u.usuario === usuario || u.email === email
+  );
+
+  if(existe){
+    return alert('Usuário ou email já cadastrado');
+  }
+
+  usuarios.push({
+    id: Date.now().toString(),
+    nome,
+    email,
+    usuario,
+    senha,
+    tipo
+  });
+
+  salvarUsuarios();
+  alert('Usuário cadastrado!');
+}
+
+// ================= PERMISSÕES =================
+function aplicarPermissoes() {
+  if (!usuarioLogado) return;
+
+  if (usuarioLogado.tipo !== 'admin') {
+    document.getElementById('newProductBtn').style.display = 'none';
+    document.getElementById('newProductBtn2').style.display = 'none';
+  }
+}
+
+// ================= LOGOUT =================
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  usuarioLogado = null;
+  appRoot.style.display='none';
+  loginPage.style.display='flex';
+});
+
+// ================= RECUPERAR SENHA =================
+function recuperarSenha(email){
+  const user = usuarios.find(u=>u.email === email);
+
+  if(!user){
+    return alert('Email não encontrado');
+  }
+
+  alert('Sua senha é: ' + user.senha);
+}
+
+// ================= EDITAR PERFIL =================
+function editarPerfil() {
+  if (!usuarioLogado) {
+    return alert('Nenhum usuário logado');
+  }
+
+  const novoNome = prompt('Novo nome', usuarioLogado.nome);
+  const novoEmail = prompt('Novo email', usuarioLogado.email);
+
+  if (novoNome) usuarioLogado.nome = novoNome;
+  if (novoEmail) usuarioLogado.email = novoEmail;
+
+  const idx = usuarios.findIndex(u => u.id === usuarioLogado.id);
+  usuarios[idx] = usuarioLogado;
+
+  salvarUsuarios();
+
+  alert('Perfil atualizado');
+}
+
+// ================= BOTÕES UI =================
+document.getElementById('demoBtn').insertAdjacentHTML('afterend', `
+  <button class="btn ghost" id="registerBtn">Cadastrar</button>
+  <button class="btn ghost" id="recoverBtn">Recuperar senha</button>
+`);
+
+document.getElementById('registerBtn').addEventListener('click', ()=>{
+  cadastrarUsuario(
+    prompt('Nome'),
+    prompt('Email'),
+    prompt('Usuário'),
+    prompt('Senha'),
+    'comum'
+  );
+});
+
+document.getElementById('recoverBtn').addEventListener('click', ()=>{
+  recuperarSenha(prompt('Digite seu email'));
+});
+
+// botão perfil no topo
+document.querySelector('.top-actions').insertAdjacentHTML('beforeend', `
+  <button class="btn ghost" onclick="editarPerfil()">👤 Perfil</button>
+  
+`);
+
+</script>
+
 </body>
 </html>
