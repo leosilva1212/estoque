@@ -215,7 +215,7 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
                 <label class="small muted" style="margin-top:8px">CLIENTE</label>
 <input id="quickCliente" list="clientesList" placeholder="Digite o nome do cliente..." autocomplete="off" />
 <datalist id="clientesList"></datalist>
-                <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:100%">
+                <div style="display:flex;gap:12px">
   <div style="flex:1">
     <label class="small muted">QUANTIDADE</label>
     <input id="quickQtd" type="number" min="1" value="1" style="width:100%;margin-top:6px" />
@@ -491,13 +491,71 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
   
   <!-- MODAL -->>
   <div id="modal-root" style="display:none"></div>
+<script>
+  // ========== VARIÁVEIS GLOBAIS ==========
+  let stock = [];
+  let sales = [];
+  let gastos = [];
+  let clientes = [];
+  let custosProdutosVendidos = 0;
+  let currentUser = null;
+  let grafPizza = null;
 
+  // ========== UTILITÁRIOS ==========
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
+  function moneyFmt(n) {
+    return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function moneyLabel(n) {
+    return 'R$ ' + moneyFmt(n);
+  }
+
+  // ========== SAVE ==========
+  async function saveData(key, data) {
+    localStorage.setItem(key, JSON.stringify(data));
+    const endpoint = key === 'loja_stock_v1' ? 'stock' : 'sales';
+    for (const item of data) {
+      await fetch(`http://localhost:3001/api/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      }).catch(() => {});
+    }
+  }
+
+  async function saveGastos(data) {
+    localStorage.setItem('loja_gastos_v1', JSON.stringify(data));
+    for (const g of data) {
+      await fetch('http://localhost:3001/api/gastos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(g)
+      }).catch(() => {});
+    }
+  }
+
+  async function saveClientes(data) {
+    localStorage.setItem('loja_clientes_v1', JSON.stringify(data));
+    for (const c of data) {
+      await fetch('http://localhost:3001/api/clientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c)
+      }).catch(() => {});
+    }
+  }
+
+  function saveCustosVendidos(val) {
+    localStorage.setItem('loja_custos_vendidos_v1', String(val));
+  }
+</script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
-  /***************************
-   * Unified Inventory App (final)
-   ***************************/
   const STORAGE_KEYS = { stock: 'loja_stock_v1', sales: 'loja_sales_v1' };
   const CREDENTIALS = { user: 'zavvo', pass: '1234@' };
 
@@ -626,7 +684,7 @@ async function saveCliente(cliente) {
     observacao
   });
   
-  saveGastos(gastos);
+  localStorage.setItem('gastos', JSON.stringify(gastos));
   gastoFormSide.reset();
   renderAll();
   alert(`Gasto de ${moneyLabel(val)} registrado com sucesso!`);
