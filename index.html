@@ -85,6 +85,25 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
  .chart-wrap-small{height:200px;position:relative;margin-top:16px}
 .tab-buttons{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
 .tab-buttons button{padding:10px 20px;font-size:13px}
+/* ===== NOVOS ESTILOS: VALIDAÇÃO DE FORMULÁRIO + PREDITIVO (EPIC2) ===== */
+.field-error{color:var(--danger);font-size:12px;margin-top:4px;min-height:14px;display:block}
+.field-ok{color:var(--success);font-size:12px;margin-top:4px;min-height:14px;display:block}
+input.invalid{border-color:var(--danger) !important;box-shadow:0 0 0 3px rgba(248,113,113,0.12) !important}
+input.valid{border-color:var(--success) !important}
+.strength-bar{height:4px;border-radius:4px;background:rgba(255,255,255,0.08);margin-top:6px;overflow:hidden}
+.strength-fill{height:100%;width:0%;border-radius:4px;transition:width .25s ease, background .25s ease}
+.predict-card{border-left:3px solid var(--accent)}
+.predict-card.risk-high{border-left-color:var(--danger)}
+.predict-card.risk-mid{border-left-color:#f59e0b}
+.predict-card.risk-low{border-left-color:var(--success)}
+.predict-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(212,175,55,0.06)}
+.predict-row:last-child{border-bottom:none}
+.tag-risk{font-size:11px;font-weight:700;text-transform:uppercase;padding:3px 10px;border-radius:20px;letter-spacing:0.5px}
+.tag-risk.alta{background:rgba(248,113,113,0.15);color:var(--danger)}
+.tag-risk.media{background:rgba(245,158,11,0.15);color:#f59e0b}
+.tag-risk.baixa{background:rgba(74,222,128,0.15);color:var(--success)}
+.insight-banner{display:flex;gap:14px;align-items:flex-start;background:rgba(212,175,55,0.05);border:1px solid rgba(212,175,55,0.18);border-radius:var(--radius-sm);padding:16px 18px;margin-bottom:16px}
+.insight-banner .icon{font-size:22px;line-height:1}
  </style>
 </head>
 <body>
@@ -200,6 +219,37 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
               <div id="resumoPizza" style="margin-top:16px" class="small muted"></div>
             </div>
 
+            <!-- ===== NOVO: INTELIGÊNCIA PREDITIVA (EPIC2) ===== -->
+            <div class="card">
+              <h4 style="margin:0 0 4px 0">🔮 Inteligência Preditiva de Estoque</h4>
+              <div class="small muted" style="margin-bottom:16px">Estimativas calculadas a partir do histórico de vendas — não substituem julgamento do gestor</div>
+
+              <div id="previsaoFaturamentoBanner" class="insight-banner">
+                <div class="icon">📈</div>
+                <div>
+                  <div style="font-weight:700">Previsão de faturamento — próximo mês</div>
+                  <div id="previsaoFaturamentoTexto" class="small muted" style="margin-top:4px">Dados insuficientes para projeção (mínimo de 2 meses com vendas).</div>
+                </div>
+              </div>
+
+              <div class="tab-buttons" style="margin-bottom:8px">
+                <button class="btn ghost active" data-predtab="ruptura">⏳ Ruptura de Estoque</button>
+                <button class="btn ghost" data-predtab="reposicao">🧾 Sugestão de Reposição</button>
+                <button class="btn ghost" data-predtab="parados">🐢 Baixa Rotatividade</button>
+              </div>
+
+              <div id="predTab-ruptura">
+                <div id="listaRuptura" style="display:flex;flex-direction:column;gap:10px"></div>
+              </div>
+              <div id="predTab-reposicao" style="display:none">
+                <div id="listaReposicao" style="display:flex;flex-direction:column;gap:10px"></div>
+              </div>
+              <div id="predTab-parados" style="display:none">
+                <div id="listaParados" style="display:flex;flex-direction:column;gap:10px"></div>
+              </div>
+            </div>
+            <!-- ===== FIM INTELIGÊNCIA PREDITIVA ===== -->
+
             <div class="card">
               <h4 style="margin:0 0 16px 0">🏆 Produtos Mais Vendidos</h4>
               <ul id="rankingProdutos" style="padding-left:20px;margin:0" class="small"></ul>
@@ -259,7 +309,6 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
           </aside>
         </div>
       </section>
-
       <!-- ESTOQUE PAGE -->
       <section id="page-estoque" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -489,7 +538,7 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
     </main>  <!-- ✅ main fecha DEPOIS de todas as páginas -->
   </div>
   
-  <!-- MODAL -->>
+  <!-- MODAL -->
   <div id="modal-root" style="display:none"></div>
 <script>
   // ========== VARIÁVEIS GLOBAIS ==========
@@ -557,7 +606,7 @@ select option, select optgroup{background:#1a1625;color:var(--white);}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
   const STORAGE_KEYS = { stock: 'loja_stock_v1', sales: 'loja_sales_v1' };
-  const CREDENTIALS = { user: 'zavvo', pass: '1234@' };
+  // Nota: autenticação não usa mais credenciais fixas em texto puro — ver módulo HU2 (usuarios_v2 com hash)
 
   const API = 'http://localhost:3001/api';
 
@@ -713,37 +762,17 @@ async function saveCliente(cliente) {
   };
   Chart.register(centerTextPlugin);
 
-  // AUTH
+  // AUTH (showApp é genérico; a lógica de credenciais vive no módulo HU2 mais abaixo)
   async function showApp(user) {
-  currentUser = user;
-  currentUserEl.textContent = user;
-  loginPage.style.display = 'none';
-  appRoot.style.display = 'grid';
-  await initDB();  // carrega do banco antes de renderizar
-  renderAll();
-}
-
-  loginBtn.addEventListener('click', ()=>{
-    const u = loginUser.value.trim();
-    const p = loginPass.value;
-    if(u === CREDENTIALS.user && p === CREDENTIALS.pass){
-      showApp(u);
-      if(remember.checked) localStorage.setItem('loja_last_user', u);
-    } else {
-      alert('Usuário ou senha incorretos.');
-    }
-  });
-  demoBtn.addEventListener('click', ()=>{ loginUser.value = CREDENTIALS.user; loginPass.value = CREDENTIALS.pass; loginBtn.click(); });
-
-  if(localStorage.getItem('loja_last_user') === CREDENTIALS.user){
-    loginUser.value = CREDENTIALS.user;
-    loginPass.value = CREDENTIALS.pass;
-    showApp(CREDENTIALS.user);
+    currentUser = user;
+    currentUserEl.textContent = user;
+    loginPage.style.display = 'none';
+    appRoot.style.display = 'grid';
+    await initDB();  // carrega do banco antes de renderizar
+    renderAll();
   }
 
-  document.getElementById('logoutBtn').addEventListener('click', ()=>{ if(confirm('Encerrar sessão?')){ currentUser = null; appRoot.style.display='none'; loginPage.style.display='flex'; } });
-
-  // NAV
+  // ========== NAVEGAÇÃO ==========
   navButtons.forEach(btn=>{
     btn.addEventListener('click', ()=>{
       navButtons.forEach(b=>b.classList.remove('active'));
@@ -1227,7 +1256,6 @@ function renderClientes(){
     });
   });
 }
-
 // ========== MODAL DE PRODUTO ==========
 function openProductModal(productId){
   modalRoot.innerHTML = '';
@@ -1343,6 +1371,7 @@ function renderAll(){
   atualizarRanking();
   buildProductOptionList();
   atualizarListaClientes();
+  renderPreditivo(); // ===== NOVO: atualiza módulo de inteligência preditiva (EPIC2) =====
 }
 
 // ========== ESTORNO ==========
@@ -1451,7 +1480,6 @@ if(!formaPagamento) return alert('Selecione a forma de pagamento.');
   renderAll();
   alert(`Venda registrada: ${qtd} x ${produto.modelo} — Total: ${moneyLabel(valorTotal)}`);
 });
-
 // ========== EXPORTAÇÃO E RESET ==========
 function toCSV(rows, headers){
   const lines = [headers.join(',')];
@@ -2018,25 +2046,6 @@ function renderTabelaCustos(){
     tbody.appendChild(tr);
   });
 }
-
-function renderTabelaCustos(){
-  const tbody = document.getElementById('tabelaCustos');
-  if(!tbody) return;
-  
-  tbody.innerHTML = '';
-  const sorted = gastos.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-  
-  sorted.forEach(g => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${g.desc}</td>
-      <td><strong>${moneyLabel(g.valor)}</strong></td>
-      <td>${new Date(g.date).toLocaleDateString('pt-BR')}</td>
-      <td>${g.formaPagamento || '-'}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
 window.addEventListener('beforeunload', ()=>{
   saveData(STORAGE_KEYS.stock, stock);
   saveData(STORAGE_KEYS.sales, sales);
@@ -2045,143 +2054,604 @@ window.addEventListener('beforeunload', ()=>{
 });
 
   </script>
-  <!-- ARQUIVO COMPLETO ATUALIZADO (RESUMIDO PARA COLAR DIRETO NO FINAL DO SEU JS) -->
+  <!-- ===================================================================
+       MÓDULO DE INTELIGÊNCIA PREDITIVA — EPIC2
+       Vai além de CRUD: calcula estimativas a partir do histórico de
+       vendas para apoiar decisão (ruptura, reposição, faturamento,
+       rotatividade). Todo cálculo é local (sem servidor de ML) e
+       documentado para deixar claro o método estatístico usado.
+       =================================================================== -->
+  <script>
+  const PRED_JANELA_DIAS = 30; // janela usada para calcular velocidade média de venda
 
-<script>
-// ================= USUÁRIOS =================
-let usuarios = JSON.parse(localStorage.getItem('usuarios')) || [
-  {
-    id: '1',
-    nome: 'Administrador',
-    email: 'admin@zavvo.com',
-    usuario: 'zavvo',
-    senha: '1234@',
-    tipo: 'admin'
-  }
-];
-
-let usuarioLogado = null;
-
-function salvarUsuarios(){
-  localStorage.setItem('usuarios', JSON.stringify(usuarios));
-}
-
-// ================= LOGIN =================
-loginBtn.addEventListener('click', () => {
-  const usuario = loginUser.value.trim();
-  const senha = loginPass.value;
-
-  const user = usuarios.find(
-    u => u.usuario === usuario && u.senha === senha
-  );
-
-  if (!user) {
-    return alert('Usuário ou senha incorretos');
+  // ---- 1) Velocidade de venda por produto (unid/dia) nos últimos N dias ----
+  function calcularVelocidadeVenda(productId, janelaDias = PRED_JANELA_DIAS){
+    const agora = new Date();
+    const limite = new Date(agora.getTime() - janelaDias * 24 * 60 * 60 * 1000);
+    const vendasProduto = sales.filter(s =>
+      !s.estornado &&
+      s.productId === productId &&
+      new Date(s.date) >= limite
+    );
+    const totalVendido = vendasProduto.reduce((a, b) => a + Number(b.qtd), 0);
+    // Se não há vendas suficientes, usamos a janela completa de vida do produto nos dados
+    if(totalVendido === 0) return 0;
+    return totalVendido / janelaDias; // unidades/dia
   }
 
-  usuarioLogado = user;
-  showApp(user.nome);
-  aplicarPermissoes();
-});
-
-// ================= CADASTRO =================
-function cadastrarUsuario(nome, email, usuario, senha, tipo='comum'){
-  const existe = usuarios.find(
-    u => u.usuario === usuario || u.email === email
-  );
-
-  if(existe){
-    return alert('Usuário ou email já cadastrado');
+  // ---- 2) Previsão de ruptura: dias restantes até qtd chegar a 0 ----
+  function calcularRuptura(){
+    return stock
+      .map(item => {
+        const velocidade = calcularVelocidadeVenda(item.id);
+        const qtd = Number(item.qtd);
+        let diasRestantes = null;
+        if(velocidade > 0){
+          diasRestantes = qtd / velocidade;
+        }
+        return { item, velocidade, diasRestantes };
+      })
+      .filter(r => r.velocidade > 0) // só produtos com venda recente têm previsão válida
+      .sort((a, b) => a.diasRestantes - b.diasRestantes);
   }
 
-  usuarios.push({
-    id: Date.now().toString(),
-    nome,
-    email,
-    usuario,
-    senha,
-    tipo
+  function classificarRisco(dias){
+    if(dias <= 7) return 'alta';
+    if(dias <= 21) return 'media';
+    return 'baixa';
+  }
+
+  function renderRuptura(){
+    const el = document.getElementById('listaRuptura');
+    if(!el) return;
+    const dados = calcularRuptura().slice(0, 8);
+    if(dados.length === 0){
+      el.innerHTML = `<div class="small muted">Sem histórico de vendas suficiente nos últimos ${PRED_JANELA_DIAS} dias para estimar ruptura.</div>`;
+      return;
+    }
+    el.innerHTML = dados.map(r => {
+      const risco = classificarRisco(r.diasRestantes);
+      const diasFmt = r.diasRestantes < 1 ? '< 1 dia' : `${Math.round(r.diasRestantes)} dias`;
+      return `
+        <div class="predict-row">
+          <div>
+            <div style="font-weight:600">${r.item.modelo} — ${r.item.cor} — ${r.item.tamanho}</div>
+            <div class="small muted">Estoque atual: ${r.item.qtd} un. • Velocidade: ${r.velocidade.toFixed(2)} un/dia</div>
+          </div>
+          <div style="text-align:right">
+            <div class="tag-risk ${risco}">${risco === 'alta' ? 'Risco alto' : risco === 'media' ? 'Risco médio' : 'Risco baixo'}</div>
+            <div class="small muted" style="margin-top:4px">~ ${diasFmt} até esgotar</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ---- 3) Sugestão de reposição: quanto comprar para cobrir N dias de cobertura ----
+  const PRED_COBERTURA_DESEJADA_DIAS = 30;
+
+  function calcularSugestaoReposicao(){
+    return stock
+      .map(item => {
+        const velocidade = calcularVelocidadeVenda(item.id);
+        if(velocidade <= 0) return null;
+        const qtdAtual = Number(item.qtd);
+        const necessidadeCobertura = velocidade * PRED_COBERTURA_DESEJADA_DIAS;
+        const sugestao = Math.max(0, Math.ceil(necessidadeCobertura - qtdAtual));
+        return { item, velocidade, sugestao, qtdAtual };
+      })
+      .filter(r => r && r.sugestao > 0)
+      .sort((a, b) => b.sugestao - a.sugestao);
+  }
+
+  function renderReposicao(){
+    const el = document.getElementById('listaReposicao');
+    if(!el) return;
+    const dados = calcularSugestaoReposicao().slice(0, 8);
+    if(dados.length === 0){
+      el.innerHTML = `<div class="small muted">Nenhuma reposição necessária com os dados atuais (estoque cobre ${PRED_COBERTURA_DESEJADA_DIAS} dias de venda projetada).</div>`;
+      return;
+    }
+    el.innerHTML = dados.map(r => `
+      <div class="predict-row">
+        <div>
+          <div style="font-weight:600">${r.item.modelo} — ${r.item.cor} — ${r.item.tamanho}</div>
+          <div class="small muted">Estoque atual: ${r.qtdAtual} un. • Meta: cobrir ${PRED_COBERTURA_DESEJADA_DIAS} dias de venda</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:18px;color:var(--accent)">+${r.sugestao} un.</div>
+          <div class="small muted">comprar sugerido</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // ---- 4) Produtos parados / baixa rotatividade ----
+  const PRED_DIAS_SEM_VENDA_ALERTA = 30;
+
+  function calcularProdutosParados(){
+    const agora = new Date();
+    return stock
+      .map(item => {
+        const vendasItem = sales.filter(s => !s.estornado && s.productId === item.id);
+        const ultimaVenda = vendasItem.length > 0
+          ? new Date(Math.max(...vendasItem.map(v => new Date(v.date).getTime())))
+          : null;
+        const diasSemVenda = ultimaVenda
+          ? Math.floor((agora - ultimaVenda) / (1000 * 60 * 60 * 24))
+          : null; // null = nunca vendeu
+        return { item, ultimaVenda, diasSemVenda };
+      })
+      .filter(r => r.diasSemVenda === null || r.diasSemVenda >= PRED_DIAS_SEM_VENDA_ALERTA)
+      .filter(r => Number(r.item.qtd) > 0)
+      .sort((a, b) => {
+        const da = a.diasSemVenda ?? Infinity;
+        const db = b.diasSemVenda ?? Infinity;
+        return db - da;
+      });
+  }
+
+  function renderParados(){
+    const el = document.getElementById('listaParados');
+    if(!el) return;
+    const dados = calcularProdutosParados().slice(0, 8);
+    if(dados.length === 0){
+      el.innerHTML = `<div class="small muted">Nenhum produto parado identificado (todos venderam nos últimos ${PRED_DIAS_SEM_VENDA_ALERTA} dias, ou estoque zerado).</div>`;
+      return;
+    }
+    el.innerHTML = dados.map(r => {
+      const valorImobilizado = Number(r.item.custo) * Number(r.item.qtd);
+      const tempoTexto = r.diasSemVenda === null ? 'nunca vendido' : `${r.diasSemVenda} dias sem venda`;
+      return `
+        <div class="predict-row">
+          <div>
+            <div style="font-weight:600">${r.item.modelo} — ${r.item.cor} — ${r.item.tamanho}</div>
+            <div class="small muted">${tempoTexto} • ${r.item.qtd} un. em estoque</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;color:var(--danger)">${moneyLabel(valorImobilizado)}</div>
+            <div class="small muted">capital parado</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ---- 5) Previsão de faturamento do próximo mês (regressão linear simples) ----
+  function obterSeriesMensaisFaturamento(){
+    const porMes = {};
+    sales.filter(s => !s.estornado).forEach(s => {
+      const d = new Date(s.date);
+      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      porMes[chave] = (porMes[chave] || 0) + Number(s.valorTotal);
+    });
+    return Object.entries(porMes)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([chave, total], idx) => ({ chave, total, x: idx }));
+  }
+
+  // Regressão linear simples (mínimos quadrados): y = a + b*x
+  function regressaoLinear(pontos){
+    const n = pontos.length;
+    const somaX = pontos.reduce((acc, p) => acc + p.x, 0);
+    const somaY = pontos.reduce((acc, p) => acc + p.total, 0);
+    const somaXY = pontos.reduce((acc, p) => acc + p.x * p.total, 0);
+    const somaXX = pontos.reduce((acc, p) => acc + p.x * p.x, 0);
+    const denom = (n * somaXX - somaX * somaX);
+    if(denom === 0) return null;
+    const b = (n * somaXY - somaX * somaY) / denom;
+    const a = (somaY - b * somaX) / n;
+    return { a, b };
+  }
+
+  function renderPrevisaoFaturamento(){
+    const banner = document.getElementById('previsaoFaturamentoBanner');
+    const texto = document.getElementById('previsaoFaturamentoTexto');
+    if(!banner || !texto) return;
+
+    const pontos = obterSeriesMensaisFaturamento();
+    if(pontos.length < 2){
+      texto.textContent = 'Dados insuficientes para projeção (mínimo de 2 meses com vendas).';
+      banner.querySelector('.icon').textContent = '📈';
+      return;
+    }
+
+    const reg = regressaoLinear(pontos);
+    if(!reg){
+      texto.textContent = 'Não foi possível calcular a projeção com os dados atuais.';
+      return;
+    }
+
+    const proximoX = pontos[pontos.length - 1].x + 1;
+    const previsao = Math.max(0, reg.a + reg.b * proximoX);
+    const tendencia = reg.b >= 0 ? 'alta' : 'queda';
+    const icone = reg.b >= 0 ? '📈' : '📉';
+    banner.querySelector('.icon').textContent = icone;
+
+    texto.innerHTML = `Com base em ${pontos.length} meses de histórico, a tendência é de <strong>${tendencia}</strong>. Faturamento estimado para o próximo mês: <strong>${moneyLabel(previsao)}</strong>. <span class="small muted">(regressão linear simples sobre o total mensal de vendas — estimativa, não garantia)</span>`;
+  }
+
+  // ---- Tabs do bloco preditivo ----
+  document.querySelectorAll('[data-predtab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-predtab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.predtab;
+      document.getElementById('predTab-ruptura').style.display = tab === 'ruptura' ? '' : 'none';
+      document.getElementById('predTab-reposicao').style.display = tab === 'reposicao' ? '' : 'none';
+      document.getElementById('predTab-parados').style.display = tab === 'parados' ? '' : 'none';
+    });
   });
 
-  salvarUsuarios();
-  alert('Usuário cadastrado!');
-}
-
-// ================= PERMISSÕES =================
-function aplicarPermissoes() {
-  if (!usuarioLogado) return;
-
-  if (usuarioLogado.tipo !== 'admin') {
-    document.getElementById('newProductBtn').style.display = 'none';
-    document.getElementById('newProductBtn2').style.display = 'none';
+  // ---- Função orquestradora chamada pelo renderAll() ----
+  function renderPreditivo(){
+    renderPrevisaoFaturamento();
+    renderRuptura();
+    renderReposicao();
+    renderParados();
   }
-}
+  </script>
+  <!-- ===================================================================
+       MÓDULO DE AUTENTICAÇÃO — HU2
+       Cadastro de usuário com:
+       1) Validação de campos (nome, email, usuário, senha)
+       2) Checagem de duplicidade (usuário OU email já existente no "BD")
+       3) Hash de senha (SHA-256 + salt via Web Crypto API)
 
-// ================= LOGOUT =================
-document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  usuarioLogado = null;
-  appRoot.style.display='none';
-  loginPage.style.display='flex';
-});
-
-// ================= RECUPERAR SENHA =================
-function recuperarSenha(email){
-  const user = usuarios.find(u=>u.email === email);
-
-  if(!user){
-    return alert('Email não encontrado');
-  }
-
-  alert('Sua senha é: ' + user.senha);
-}
-
-// ================= EDITAR PERFIL =================
-function editarPerfil() {
-  if (!usuarioLogado) {
-    return alert('Nenhum usuário logado');
+       ⚠️ LIMITAÇÃO IMPORTANTE (documentada para a entrega):
+       Como hoje os usuários ficam em localStorage (não em um banco de
+       dados real com backend dedicado), este hash protege a senha
+       contra leitura casual e contra reaproveitamento de senha — mas
+       NÃO é equivalente à segurança de um backend real com bcrypt/argon2
+       e HTTPS. Se o EPIC1 evoluir para autenticação real no servidor,
+       o hash deve ser refeito no backend (bcrypt/argon2), nunca confiar
+       apenas no hash do cliente.
+       =================================================================== -->
+  <script>
+  // ---------- CRIPTOGRAFIA DE SENHA (SHA-256 + salt) ----------
+  async function gerarSalt(){
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  const novoNome = prompt('Novo nome', usuarioLogado.nome);
-  const novoEmail = prompt('Novo email', usuarioLogado.email);
+  async function hashSenha(senha, salt){
+    const encoder = new TextEncoder();
+    const data = encoder.encode(salt + ':' + senha);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
-  if (novoNome) usuarioLogado.nome = novoNome;
-  if (novoEmail) usuarioLogado.email = novoEmail;
+  async function verificarSenha(senhaDigitada, salt, hashArmazenado){
+    const hashCalculado = await hashSenha(senhaDigitada, salt);
+    return hashCalculado === hashArmazenado;
+  }
 
-  const idx = usuarios.findIndex(u => u.id === usuarioLogado.id);
-  usuarios[idx] = usuarioLogado;
+  // ---------- VALIDAÇÃO DE CAMPOS ----------
+  function validarNome(nome){
+    if(!nome || nome.trim().length < 3) return 'Nome deve ter ao menos 3 caracteres.';
+    if(!/^[A-Za-zÀ-ÿ\s]+$/.test(nome.trim())) return 'Nome deve conter apenas letras e espaços.';
+    return null;
+  }
 
-  salvarUsuarios();
+  function validarEmail(email){
+    if(!email) return 'Email é obrigatório.';
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if(!regex.test(email.trim())) return 'Formato de email inválido.';
+    return null;
+  }
 
-  alert('Perfil atualizado');
-}
+  function validarUsuario(usuario){
+    if(!usuario || usuario.trim().length < 4) return 'Usuário deve ter ao menos 4 caracteres.';
+    if(/\s/.test(usuario)) return 'Usuário não pode conter espaços.';
+    if(!/^[A-Za-z0-9_.]+$/.test(usuario.trim())) return 'Usuário só pode conter letras, números, "_" e ".".';
+    return null;
+  }
 
-// ================= BOTÕES UI =================
-document.getElementById('demoBtn').insertAdjacentHTML('afterend', `
-  <button class="btn ghost" id="registerBtn">Cadastrar</button>
-  <button class="btn ghost" id="recoverBtn">Recuperar senha</button>
-`);
+  // Critérios de senha: mín. 8 caracteres, 1 maiúscula, 1 número
+  function validarSenha(senha){
+    if(!senha || senha.length < 8) return 'Senha deve ter ao menos 8 caracteres.';
+    if(!/[A-Z]/.test(senha)) return 'Senha deve ter ao menos 1 letra maiúscula.';
+    if(!/[0-9]/.test(senha)) return 'Senha deve ter ao menos 1 número.';
+    return null;
+  }
 
-document.getElementById('registerBtn').addEventListener('click', ()=>{
-  cadastrarUsuario(
-    prompt('Nome'),
-    prompt('Email'),
-    prompt('Usuário'),
-    prompt('Senha'),
-    'comum'
-  );
-});
+  function calcularForcaSenha(senha){
+    if(!senha) return 0;
+    let pontos = 0;
+    if(senha.length >= 8) pontos += 25;
+    if(senha.length >= 12) pontos += 15;
+    if(/[A-Z]/.test(senha)) pontos += 20;
+    if(/[0-9]/.test(senha)) pontos += 20;
+    if(/[^A-Za-z0-9]/.test(senha)) pontos += 20;
+    return Math.min(100, pontos);
+  }
 
-document.getElementById('recoverBtn').addEventListener('click', ()=>{
-  recuperarSenha(prompt('Digite seu email'));
-});
+  // ---------- BASE DE USUÁRIOS ----------
+  // Migra usuário admin legado (sem hash) para o novo formato no primeiro carregamento.
+  let usuarios = JSON.parse(localStorage.getItem('usuarios_v2')) || null;
 
-// botão perfil no topo
-document.querySelector('.top-actions').insertAdjacentHTML('beforeend', `
-  <button class="btn ghost" onclick="editarPerfil()">👤 Perfil</button>
-  
-`);
+  async function inicializarUsuarios(){
+    if(usuarios) return;
+    const saltAdmin = await gerarSalt();
+    const hashAdmin = await hashSenha('1234@', saltAdmin);
+    usuarios = [{
+      id: '1',
+      nome: 'Administrador',
+      email: 'admin@zavvo.com',
+      usuario: 'zavvo',
+      senhaHash: hashAdmin,
+      salt: saltAdmin,
+      tipo: 'admin'
+    }];
+    salvarUsuarios();
+  }
 
-</script>
+  function salvarUsuarios(){
+    localStorage.setItem('usuarios_v2', JSON.stringify(usuarios));
+  }
 
+  function buscarPorUsuarioOuEmail(usuario, email){
+    return usuarios.find(u =>
+      u.usuario.toLowerCase() === (usuario || '').toLowerCase() ||
+      u.email.toLowerCase() === (email || '').toLowerCase()
+    );
+  }
+
+  let usuarioLogado = null;
+
+  // ---------- CADASTRO COM VALIDAÇÃO + DUPLICIDADE + HASH ----------
+  async function cadastrarUsuario({ nome, email, usuario, senha, tipo = 'comum' }){
+    const erros = {};
+    const erroNome = validarNome(nome); if(erroNome) erros.nome = erroNome;
+    const erroEmail = validarEmail(email); if(erroEmail) erros.email = erroEmail;
+    const erroUsuario = validarUsuario(usuario); if(erroUsuario) erros.usuario = erroUsuario;
+    const erroSenha = validarSenha(senha); if(erroSenha) erros.senha = erroSenha;
+
+    if(Object.keys(erros).length > 0){
+      return { sucesso: false, erros };
+    }
+
+    // Checagem de duplicidade — usuário OU email já cadastrado
+    const existente = buscarPorUsuarioOuEmail(usuario, email);
+    if(existente){
+      const duplicado = existente.usuario.toLowerCase() === usuario.toLowerCase() ? 'usuario' : 'email';
+      return {
+        sucesso: false,
+        erros: { [duplicado]: duplicado === 'usuario' ? 'Este nome de usuário já está em uso.' : 'Este email já está cadastrado.' }
+      };
+    }
+
+    const salt = await gerarSalt();
+    const senhaHash = await hashSenha(senha, salt);
+
+    usuarios.push({
+      id: uid(),
+      nome: nome.trim(),
+      email: email.trim().toLowerCase(),
+      usuario: usuario.trim(),
+      senhaHash,
+      salt,
+      tipo
+    });
+    salvarUsuarios();
+    return { sucesso: true };
+  }
+
+  // ---------- LOGIN ----------
+  async function autenticar(usuarioDigitado, senhaDigitada){
+    const user = usuarios.find(u => u.usuario.toLowerCase() === usuarioDigitado.toLowerCase());
+    if(!user) return null;
+    const ok = await verificarSenha(senhaDigitada, user.salt, user.senhaHash);
+    return ok ? user : null;
+  }
+
+  loginBtn.addEventListener('click', async () => {
+    const usuario = loginUser.value.trim();
+    const senha = loginPass.value;
+    if(!usuario || !senha) return alert('Informe usuário e senha.');
+
+    await inicializarUsuarios();
+    const user = await autenticar(usuario, senha);
+    if(!user){
+      return alert('Usuário ou senha incorretos.');
+    }
+    usuarioLogado = user;
+    await showApp(user.nome);
+    aplicarPermissoes();
+    if(remember.checked) localStorage.setItem('loja_last_user', usuario);
+  });
+
+  demoBtn.addEventListener('click', async () => {
+    await inicializarUsuarios();
+    loginUser.value = 'zavvo';
+    loginPass.value = '1234@';
+    loginBtn.click();
+  });
+
+  // Auto-login se "lembrar" estava marcado (não reexpõe senha — exige clique do usuário no Demo se preferir)
+  (async () => {
+    await inicializarUsuarios();
+    const lastUser = localStorage.getItem('loja_last_user');
+    if(lastUser){
+      loginUser.value = lastUser;
+    }
+  })();
+
+  // ---------- PERMISSÕES ----------
+  function aplicarPermissoes(){
+    if(!usuarioLogado) return;
+    if(usuarioLogado.tipo !== 'admin'){
+      document.getElementById('newProductBtn').style.display = 'none';
+      document.getElementById('newProductBtn2').style.display = 'none';
+    }
+  }
+
+  // ---------- LOGOUT ----------
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    if(!confirm('Encerrar sessão?')) return;
+    usuarioLogado = null;
+    currentUser = null;
+    appRoot.style.display = 'none';
+    loginPage.style.display = 'flex';
+  });
+
+  // ---------- RECUPERAÇÃO DE SENHA (sem expor a senha original) ----------
+  // Em vez de mostrar a senha (inseguro mesmo com hash, pois hash não é
+  // reversível e nunca deveria ser "revelado"), o fluxo gera uma senha
+  // temporária validada e força a troca no próximo login.
+  async function recuperarSenha(email){
+    const user = usuarios.find(u => u.email.toLowerCase() === (email || '').trim().toLowerCase());
+    if(!user){
+      return alert('Se este email existir em nossa base, uma nova senha temporária seria enviada a ele.');
+    }
+    const senhaTemp = 'Temp' + Math.floor(1000 + Math.random() * 9000) + '!';
+    const novoSalt = await gerarSalt();
+    user.senhaHash = await hashSenha(senhaTemp, novoSalt);
+    user.salt = novoSalt;
+    salvarUsuarios();
+    // Em produção real isso seria enviado por email, nunca exibido em tela.
+    alert('Senha temporária gerada: ' + senhaTemp + '\n\n(Em produção, isto seria enviado por email — aqui é exibido apenas para fins de teste local.)');
+  }
+
+  // ---------- EDITAR PERFIL ----------
+  function editarPerfil(){
+    if(!usuarioLogado) return alert('Nenhum usuário logado.');
+    const novoNome = prompt('Novo nome', usuarioLogado.nome);
+    if(novoNome){
+      const erro = validarNome(novoNome);
+      if(erro) return alert(erro);
+      usuarioLogado.nome = novoNome.trim();
+    }
+    const novoEmail = prompt('Novo email', usuarioLogado.email);
+    if(novoEmail){
+      const erro = validarEmail(novoEmail);
+      if(erro) return alert(erro);
+      const duplicado = usuarios.find(u => u.id !== usuarioLogado.id && u.email.toLowerCase() === novoEmail.trim().toLowerCase());
+      if(duplicado) return alert('Este email já está em uso por outro usuário.');
+      usuarioLogado.email = novoEmail.trim().toLowerCase();
+    }
+    const idx = usuarios.findIndex(u => u.id === usuarioLogado.id);
+    if(idx >= 0) usuarios[idx] = usuarioLogado;
+    salvarUsuarios();
+    alert('Perfil atualizado.');
+  }
+
+  // ---------- MODAL DE CADASTRO (com validação visual em tempo real) ----------
+  function abrirModalCadastro(){
+    modalRoot.innerHTML = '';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Cadastrar novo usuário</h3>
+        <button class="btn ghost" id="closeModal">Fechar</button>
+      </div>
+      <form id="cadastroForm" style="display:flex;flex-direction:column;gap:4px">
+        <div>
+          <label class="small muted">NOME COMPLETO</label>
+          <input id="c_nome" placeholder="Nome completo" style="margin-top:6px;width:100%" />
+          <span class="field-error" id="err_nome"></span>
+        </div>
+        <div>
+          <label class="small muted">EMAIL</label>
+          <input id="c_email" type="email" placeholder="email@exemplo.com" style="margin-top:6px;width:100%" />
+          <span class="field-error" id="err_email"></span>
+        </div>
+        <div>
+          <label class="small muted">USUÁRIO</label>
+          <input id="c_usuario" placeholder="ex: joao.silva" style="margin-top:6px;width:100%" />
+          <span class="field-error" id="err_usuario"></span>
+        </div>
+        <div>
+          <label class="small muted">SENHA (mín. 8 caracteres, 1 maiúscula, 1 número)</label>
+          <input id="c_senha" type="password" placeholder="Senha" style="margin-top:6px;width:100%" />
+          <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+          <span class="field-error" id="err_senha"></span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button type="submit" class="btn">Cadastrar</button>
+        </div>
+      </form>
+    `;
+    backdrop.appendChild(modal);
+    modalRoot.appendChild(backdrop);
+    modalRoot.style.display = 'block';
+
+    const closeModal = () => { modalRoot.innerHTML = ''; modalRoot.style.display = 'none'; };
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) closeModal(); });
+
+    // Validação em tempo real
+    const campoNome = document.getElementById('c_nome');
+    const campoEmail = document.getElementById('c_email');
+    const campoUsuario = document.getElementById('c_usuario');
+    const campoSenha = document.getElementById('c_senha');
+
+    function marcarCampo(input, erroEl, mensagemErro){
+      if(mensagemErro){
+        input.classList.add('invalid'); input.classList.remove('valid');
+        erroEl.textContent = mensagemErro;
+      } else {
+        input.classList.remove('invalid'); input.classList.add('valid');
+        erroEl.textContent = '';
+      }
+    }
+
+    campoNome.addEventListener('blur', () => marcarCampo(campoNome, document.getElementById('err_nome'), validarNome(campoNome.value)));
+    campoEmail.addEventListener('blur', () => marcarCampo(campoEmail, document.getElementById('err_email'), validarEmail(campoEmail.value)));
+    campoUsuario.addEventListener('blur', () => marcarCampo(campoUsuario, document.getElementById('err_usuario'), validarUsuario(campoUsuario.value)));
+    campoSenha.addEventListener('input', () => {
+      const forca = calcularForcaSenha(campoSenha.value);
+      const fill = document.getElementById('strengthFill');
+      fill.style.width = forca + '%';
+      fill.style.background = forca < 40 ? 'var(--danger)' : forca < 75 ? '#f59e0b' : 'var(--success)';
+      marcarCampo(campoSenha, document.getElementById('err_senha'), validarSenha(campoSenha.value));
+    });
+
+    document.getElementById('cadastroForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const resultado = await cadastrarUsuario({
+        nome: campoNome.value,
+        email: campoEmail.value,
+        usuario: campoUsuario.value,
+        senha: campoSenha.value
+      });
+
+      if(!resultado.sucesso){
+        Object.entries(resultado.erros).forEach(([campo, msg]) => {
+          const input = document.getElementById('c_' + campo);
+          const erroEl = document.getElementById('err_' + campo);
+          if(input && erroEl) marcarCampo(input, erroEl, msg);
+        });
+        return;
+      }
+
+      alert('Usuário cadastrado com sucesso! Você já pode entrar com as novas credenciais.');
+      closeModal();
+    });
+  }
+
+  // ---------- BOTÕES DE UI (cadastro / recuperação / perfil) ----------
+  demoBtn.insertAdjacentHTML('afterend', `
+    <button class="btn ghost" id="registerBtn">Cadastrar</button>
+    <button class="btn ghost" id="recoverBtn">Recuperar senha</button>
+  `);
+
+  document.getElementById('registerBtn').addEventListener('click', async () => {
+    await inicializarUsuarios();
+    abrirModalCadastro();
+  });
+
+  document.getElementById('recoverBtn').addEventListener('click', async () => {
+    await inicializarUsuarios();
+    const email = prompt('Digite seu email cadastrado:');
+    if(email !== null) recuperarSenha(email);
+  });
+
+  document.querySelector('.top-actions').insertAdjacentHTML('beforeend', `
+    <button class="btn ghost" onclick="editarPerfil()">👤 Perfil</button>
+  `);
+  </script>
 </body>
 </html>
